@@ -1,0 +1,293 @@
+---
+title: "zambia_exploratory"
+author: "Jacob Winter"
+format: html
+editor: visual
+---
+
+```{r}
+#| echo = False
+library(tidyverse)
+library(lubridate)
+library(zoo)
+library(svMisc)
+library(tm)
+library(quanteda)
+library(seededlda)
+library(countrycode)
+library(readxl)
+options(scipen=99)
+theme_set(theme_minimal())
+
+path = "~/Dropbox/parl_debates_data/zambia_data/"
+
+text <- read_csv(paste0(path,"matched_speeches_v1.csv")) %>% 
+  mutate(date = ymd(date))
+
+budgets <- read_csv(paste0(path,"budget_speech_dates.csv"), col_types = 'cc') %>% 
+  mutate(date = ymd(date)) %>% 
+  drop_na() 
+
+
+debates <- c()
+for(d in 1:nrow(budgets)){
+  date <- budgets$date[d]
+  range <- seq(date, by = "day", length.out = 21)
+  debates <- c(debates,ymd(range))
+}
+
+text <- text %>% mutate(in_debate = as.numeric(date) %in% debates)
+
+leaders <- read_excel("~/repos/archive/parl_debates/zambia/raw_data/year_map.xlsx",1) %>% 
+  mutate(gov = paste(government,"- ", president)) %>% 
+  select(year, gov)
+```
+
+```{r}
+#Sentiment toward bonds by party/year
+library(tidytext)
+dict <- get_sentiments("afinn")
+#filter to paragraphs about bonds
+#bond_dict <- c('bonds','bond','eurobond')  
+#bond_dict <- c('paye',"pay as","Pay As You Earn")
+#bond_dict <- c('windfall','royalties','royalty')
+
+ed_dict <- c("education", "educate", "school", "schools", "teacher", "teachers")
+
+c <- corpus(text) %>%  
+  #corpus_sample(size = 5000) %>% #Optional- speed up processing with just some docs
+  corpus_reshape(to='paragraphs') %>% 
+  tokens() 
+  
+d <- kwic(c, ed_dict)
+
+dd <- c %>% 
+  dfm() %>% 
+  dfm_weight(scheme='prop') %>% 
+  dfm_subset(docname_ %in% d$docname) #Keep only the docs which are returned by kwic
+
+zam_ed_mentions <- dd@docvars |> 
+  group_by(year) |> 
+  summarize(ed_mentions = n()) |> 
+  mutate(country_year = paste0("ZMB", year))
+
+
+############################################################
+
+text2 <- text %>% 
+  rename('doc_id' =1) %>% 
+  left_join(data.frame(dd), by= "doc_id")
+
+
+
+dfm <- convert(dd, to='data.frame') %>% 
+  t() %>% 
+  as.data.frame() %>% 
+  rownames_to_column(var = "word") 
+
+dfm <- dd
+colnames(dfm) <- dfm[1,]
+dfm <- rename(dfm, word = 1)
+
+dfm <- left_join(dfm, dict, by='word')
+
+n= ncol(dfm)-2
+
+dfm2 <- dfm %>% 
+  filter(word != 'doc_id') %>% 
+  mutate(across(1:n, ~as.numeric(.x)*value, .names = "scored_{col}")) %>% 
+  select((n+3):((n*2)+2)) %>% 
+  colSums() %>% 
+  as.data.frame() %>%
+  rownames_to_column(var = "doc_id") %>% 
+  rename("afinn_score" = 2) %>% 
+  filter(doc_id !="scored_word") %>% 
+  mutate(doc_id  = as.numeric(sub("scored_text","",doc_id)))
+  
+text2 <- text %>% 
+  rename('doc_id' =1) %>% 
+  left_join(dfm2, by= "doc_id") %>% 
+  drop_na(afinn_score) %>% 
+  left_join(leaders, by='year')
+
+text2 %>% 
+  mutate(date = format.Date(date, '%Y'),
+         date=as.numeric(date)) %>% 
+  group_by(date, party) %>% 
+  summarize(afinn_score = mean(afinn_score),
+            gov=first(gov)) %>% 
+  drop_na() %>% 
+  filter(party %in% c("UPND", "PF","MMD")) %>% 
+  ggplot(aes(x=date, y=afinn_score, color=party, group=party)) +
+  geom_line() + geom_point(size=1) +
+    geom_text(aes(x=date, y=-.02,label=gov),angle=90, alpha=.3, size=3, color='black',hjust='right') +
+  ylim(-.05,NA) +
+  labs(title="Sentiment toward `windfall/royalties` by party",y='Average Sentiment', x="year")
+  
+#ggsave("~/Desktop/windfall_sent.jpg",width=8,height=5)
+
+```
+
+```{r}
+
+
+dictfile <- tempfile()
+download.file("https://provalisresearch.com/Download/LaverGarry.zip",
+              dictfile, mode = "wb")
+unzip(dictfile, exdir = (td <- tempdir()))
+dictlg <- dictionary(file = paste(td, "LaverGarry.cat", sep = "/"))
+
+dfm <- dfm(corpus(text), dictionary = dictlg)
+topics <- cbind(text, convert(dfm, "data.frame"))
+
+vars <- c("INSTITUTIONS.CONSERVATIVE", "INSTITUTIONS.NEUTRAL", "INSTITUTIONS.RADICAL")
+vars <- c("ECONOMY.-STATE-", "ECONOMY.+STATE+")
+
+t2 <- topics %>%
+  mutate(year = substr(date,1,4)) %>% 
+  filter(as.numeric(year)<2023) %>% 
+  group_by(year, party) %>% 
+  select(all_of(vars)) %>% 
+  summarise_all(mean) %>% 
+  gather(3:(length(vars)+2), key = "Topic", value = "Share") %>% 
+  mutate(Topic = as_factor(Topic)) 
+  
+t2 %>% 
+  mutate(Topic = ifelse(Topic =="ECONOMY.-STATE-", "Less State", "More State")) %>% 
+  filter(party %in% c("UPND", "MMD", "PF")) %>% 
+ggplot(aes(as.numeric(year), Share, colour = Topic, fill = Topic, group = Topic)) + 
+  ggplot2::annotate("rect", xmin = 2001, xmax = 2010, ymin = -Inf, ymax = Inf,
+           alpha = .1,fill = "blue") +
+  ggplot2::annotate("rect", xmin = 2010, xmax = 2020, ymin = -Inf, ymax = Inf,
+           alpha = .1,fill = "green") +
+  ggplot2::annotate("rect", xmin = 2020, xmax = 2022, ymin = -Inf, ymax = Inf,
+           alpha = .1,fill = "red") +
+  ggplot2::annotate("text", x = 2005, y = .1, label = "MMD", alpha=.8, 
+                    color='darkgrey', size=3) +
+  ggplot2::annotate("text", x = 2015, y = .1, label = "PF", alpha=.8, 
+                    color='darkgrey', size=3) +
+  ggplot2::annotate("text", x = 2021, y = .1, label = "UPND", alpha=.8, 
+                    color='darkgrey', size=3) +
+  geom_line(stat="identity") + 
+  scale_colour_brewer(palette = "Set1") + 
+  scale_fill_brewer(palette = "Pastel1") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(x="Year", y="Frequency") +
+  facet_wrap(vars(party), ncol=3)
+
+dictlg
+
+```
+
+![]()
+
+```{r}
+vpartyraw <- read_csv("~/Dropbox/RawDataHub/V-Party/V-Dem-CPD-Party-V1.csv") 
+
+vparty <- vpartyraw %>% #Select and rename indicators
+  dplyr::select("country_name","country_id", "year", "v2xpa_popul", "v2papeople", "v2pariglef", "ep_antielite_salience", "v2pagovsup",
+         "v2pagroup_8", "v2pagroup_9", "v2pagroup_10", "v2pagroup_11", "v2pagroup_1", "v2pagroup_2", "v2pagroup_3", "v2pagroup_6", "v2pawelf") %>% 
+  filter(v2pagovsup == 0) %>% #In power-- check
+  arrange(country_name, year) %>% 
+  group_by(country_name, year) %>%
+  summarise_each(funs(mean)) %>% 
+  rename(Party_EconRCL = v2pariglef) %>%
+  rename(Party_WelfareSprt = v2pawelf) %>%
+  mutate(Party_Elites_WithAg = ((v2pagroup_1 + v2pagroup_2 + v2pagroup_3) / 3),
+         Party_Elites_NoAg = ((v2pagroup_1 + v2pagroup_3) / 2),
+         Party_UrbAndRuralWorkingAndMid = ((v2pagroup_8 + v2pagroup_9 + v2pagroup_10 + v2pagroup_11) / 4),
+         Party_UrbAndRuralWorking = ((v2pagroup_8 + v2pagroup_10) / 2),
+         iso3c = countrycode(country_name, "country.name", "iso3c", custom_match = c('Kosovo' = 'KSV')),
+         country_year = paste0(iso3c, year)) %>% 
+  ungroup()
+```
+
+```{r}
+setwd("/Users/jacobwinter/Dropbox/parl_debates_data/uganda_data/raw")
+
+files <- list.files(recursive=TRUE)
+files <- sample(files, 3)
+texts <- readtext::readtext(files)
+```
+
+```{r}
+#Kenya Hansard
+path = "~/Dropbox/parl_debates_data/kenya_data/kenya_hansard_split/"
+
+docs <- list.files(path)
+
+merged <- data.frame()
+for (d in docs){
+  merged <- plyr::rbind.fill(merged, 
+                             read_csv(paste0(path, d)))
+}
+
+c <- merged |> 
+  mutate(year = substr(Date, 1,4),
+         id = 1,
+         id = cumsum(id)) |> 
+  corpus(text_field="Speech") %>%  
+  #corpus_sample(size = 5000) %>% #Optional- speed up processing with just some docs
+  corpus_reshape(to='paragraphs') %>% 
+  tokens() 
+  
+d <- kwic(c, ed_dict)
+
+dd <- c %>% 
+  dfm() %>% 
+  dfm_weight(scheme='prop') %>% 
+  dfm_subset(docname_ %in% d$docname) #Keep only the docs which are returned by kwic
+
+ken_ed_mentions <- dd@docvars |> 
+  group_by(year) |> 
+  summarize(ed_mentions = n()) |> 
+  mutate(country_year = paste0("KEN", year))
+
+
+hansard_ed_mentions <- rbind(zam_ed_mentions, ken_ed_mentions)
+
+write_csv(hansard_ed_mentions, "~/Dropbox/parl_debates_data/hansard_ed_mentions.csv")
+
+
+```
+
+```{r}
+road_dict <- c("road", "roads", "highway", "highways", "pave", "tar")  
+d <- kwic(c, road_dict)
+
+dd <- c %>% 
+  dfm() %>% 
+  dfm_weight(scheme='prop') %>% 
+  dfm_subset(docname_ %in% d$docname) #Keep only the docs which are returned by kwic
+
+ken_road_mentions <- dd@docvars |> 
+  group_by(year) |> 
+  summarize(road_mentions = n()) |> 
+  mutate(country_year = paste0("KEN", year))
+
+
+
+c <- corpus(text) %>%  
+  #corpus_sample(size = 5000) %>% #Optional- speed up processing with just some docs
+  corpus_reshape(to='paragraphs') %>% 
+  tokens() 
+  
+d <- kwic(c, road_dict)
+
+dd <- c %>% 
+  dfm() %>% 
+  dfm_weight(scheme='prop') %>% 
+  dfm_subset(docname_ %in% d$docname) #Keep only the docs which are returned by kwic
+
+zam_road_mentions <- dd@docvars |> 
+  group_by(year) |> 
+  summarize(road_mentions = n()) |> 
+  mutate(country_year = paste0("ZMB", year))
+
+
+
+
+hansard_road_mentions <- rbind(zam_road_mentions, ken_road_mentions)
+
+write_csv(hansard_road_mentions, "~/Dropbox/parl_debates_data/hansard_road_mentions.csv")
+```

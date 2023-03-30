@@ -5,7 +5,9 @@ from tqdm import tqdm
 import datetime
 
 #import csv
-corpus = pd.read_csv("raw_data/parl_debates_zm.csv") #All agreement types
+path = "/Users/jacobwinter/Dropbox/parl_debates_data/zambia_data/"
+file = "parl_debates_zm_2023_03_29.csv"
+corpus = pd.read_csv(path+file) #All agreement types
 
 
 
@@ -54,6 +56,6 @@ for index, row in tqdm(corpus.iterrows(), total=corpus.shape[0]):
 df = pd.DataFrame(
     {'date': dates, 'speaker': speakers, 'text':texts, 'url':urls}
 )
-df.to_csv("raw_data/split_debates.csv")
+df.to_csv(path+"/split_debates.csv")
 
 
