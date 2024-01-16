@@ -6,8 +6,8 @@ import datetime
 
 #import csv
 path = "/Users/jacobwinter/Dropbox/parl_debates_data/zambia_data/"
-file = "parl_debates_zm_2023_07_20.csv"
-corpus = pd.read_csv(path+file) 
+file = "parl_debates_zm_2023_03_29.csv"
+corpus = pd.read_csv(path+file) #All agreement types
 
 
 
@@ -43,10 +43,10 @@ for index, row in tqdm(corpus.iterrows(), total=corpus.shape[0]):
         i = 1
         for slice in names[1:]: #Skip the first (intro) line, go every other between speaker and text
             if (i % 2) == 0:
-                #slice = re.sub("\n", " ", slice)
+                slice = re.sub("\n", " ", slice)
                 texts.append(slice)
             else:
-                #slice = re.sub("\n", "", slice)
+                slice = re.sub("\n", "", slice)
                 speakers.append(slice)
                 dates.append(date)
                 urls.append(url)

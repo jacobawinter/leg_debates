@@ -1,0 +1,9 @@
+Process
+
+Scrape:renew_debates_zmb.py
+Output: parl_debates_zm_2023_03_29_2
+Split: split_sections_speeches ####{old dep} split_texts_zam.py
+Output: split_debates_sec.csv
+Match: match_members_zam.R
+Output: debates_matched_split_sec.csv (and 'split_matched_debates' folder)
+

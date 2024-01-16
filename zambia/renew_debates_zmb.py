@@ -37,7 +37,7 @@ for url in main_urls:
 # Get existing data
 data_dir = "/Users/jacobwinter/Dropbox/parl_debates_data/zambia_data"
 
-existing = pd.read_csv(data_dir + "/parl_debates_zm.csv")
+existing = pd.read_csv(data_dir + "/parl_debates_zm_2023_07_20.csv")
 # Get unique links - get hnode not in
 
 filtered_list = [x for x in h_node if x not in list(existing['url'])]
