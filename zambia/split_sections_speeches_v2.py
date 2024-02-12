@@ -3,21 +3,24 @@ import re
 import pandas as pd
 from tqdm import tqdm
 import datetime
+from datetime import date as d
+
 
 #import csv
 path = "/Users/jacobwinter/Dropbox/parl_debates_data/zambia_data/"
-file = "parl_debates_zm_2023_07_20.csv"
+file = "parl_debates_zm_2024_01_22.csv"
 corpus = pd.read_csv(path+file) #All agreement types
 
-
-corpus['text'][0]
+#corpus['text'][0]
 #choose a random set
-#corpus = corpus.sample(100)
+#corpus = corpus.sample(10)
 
 #corpus['year'] = corpus['date'].astype(str).str[-4:]
 #is_2010 = corpus['year']=='2010'
 #corpus = corpus[is_2010]
 
+corpus = corpus[corpus['text'] != "ERROR"]
+#corpus = corpus[corpus['url'] == "https://www.parliament.gov.zm/node/10064"]
 speakers = []
 texts = []
 dates = []
@@ -31,7 +34,8 @@ for index, row in tqdm(corpus.iterrows(), total=corpus.shape[0]):
     #text = corpus.iloc[i, 2]
     text= row['text']
     if isinstance(text, str):
-        sections = re.split('-----|_____', text)
+        text = re.sub("{mospagebreak}","", text) #get rid of this artefact as it can mess up identifying headers
+        sections = re.split('(\n[\'\’,.!/A-Z0-9 ]{3,}\n)', text)
         date = row['date']
         date = re.sub("Monday, |Tuesday, |Wednesday, |Thursday, |Friday, |Saturday, |Sunday, |Debates-|st|th|nd|rd", "", date)
         date = re.sub("Otober", "October", date)
@@ -44,35 +48,27 @@ for index, row in tqdm(corpus.iterrows(), total=corpus.shape[0]):
         date = str(year)+"-"+str(month)+"-"+str(day)
         url = row['url']
         #date = datetime.datetime.strptime(re.sub(r"\b([0123]?[0-9])(st|th|nd|rd)\b",r"\1", date), "%d %B, %Y")
-        i = 1
-        s = 0
-        for sec in sections:
-          
-            names = re.split('(\n.{0,100}:)', sec)
-            #print(names[0])
-            s = s+1
-            for slice in names[1:]: #Skip the first (section header) line, go every other between speaker and text
-                if (i % 2) == 0:
-                    #slice = re.sub("\n", " ", slice)
-                    texts.append(slice)
-                else:
-                    #slice = re.sub("\n", "", slice)
-                    speakers.append(slice)
-                    dates.append(date)
-                    urls.append(url)
-                    section_list.append(s)
-                    section_name.append(names[0])
-                i = i+1
-                
-
-len(texts)
-len(speakers)
-len(urls)
-
+        for i in range(1, len(sections), 2):
+          names = re.split('(\n.{0,100}:)', sections[i+1])
+          #print(i)
+          #print(names[0])
+          header = (sections[i])
+      
+          if len(names)>1:
+            for ii in range(1, len(names), 2):
+                speakers.append(names[ii])
+                texts.append(names[ii+1])
+                dates.append(date)
+                urls.append(url)
+                section_name.append(header)
+  
 
 df = pd.DataFrame(
-    {'date': dates, 'section_num': section_list, 'section_name':section_name, 'speaker': speakers, 'text':texts, 'url':urls}
-)
+    {'date': dates, 'section_name':section_name, 'speaker': speakers, 'text':texts, 'url':urls}
+)    
+today = d.today()
+d1 = today.strftime("%Y_%m_%d")
+
+df.to_csv(path + "/split_debates_sec_" + d1 + ".csv")
 
 
-df.to_csv(path+"/split_debates_sec.csv")

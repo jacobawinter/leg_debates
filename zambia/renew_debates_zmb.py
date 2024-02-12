@@ -46,7 +46,7 @@ filtered_list = [x for x in h_node if x not in list(existing['url'])]
 for url in filtered_list:
     print(url)
     try:
-        requests.get(url)
+        requests.get(url) #here for the try catch
         page = requests.get(url)
         soup = BeautifulSoup(page.content, "html.parser")
         date = soup.find("h1", id="page-title").text.strip()
