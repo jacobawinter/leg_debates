@@ -54,7 +54,7 @@ members_2 <- members %>%
   left_join(alt_names, by="id")
 #### Link to Speeches####
 #Group speeches by speaker and session
-split_raw <- read_csv(paste0(path,"split_debates_sec_2024_01_29.csv")) %>% 
+split_raw <- read_csv(paste0(path,"split_debates_sec_2024_02_19.csv")) %>% 
   select(-1) %>% 
   mutate(#speaker = removePunctuation(speaker),
          speaker = gsub("’","",speaker),
@@ -73,13 +73,13 @@ split <- split %>%
   # dplyr::select(sessions, -year),
   # by = c("date" = "start","date" = "end"),
   # match_fun = list(`>=`, `<=`)) %>% 
-  mutate(assembly = ymd(date),
-         assembly = case_when(assembly > ymd("2021-05-14") ~ "2021-2026", #last dates of each assembly, found manually
-                              assembly > ymd("2016-11-05") ~ "2016-2021",
-                              assembly > ymd("2011-10-06") ~ "2011-2016", #eleventh assembly start
-                              assembly > ymd("2006-10-20") ~ "2006-2011", #tenth
-                              assembly > ymd("2002-01-25") ~ "2001-2006", #ninth
-                              assembly > ymd("1996-01-01") ~ "1996-2001"
+  mutate(date = ymd(date),
+         assembly = case_when(date > ymd("2021-08-31") ~ "2021-2026", #last dates of each assembly, found manually (plus examining when speeches start)
+                              date > ymd("2016-08-31") ~ "2016-2021", 
+                              date > ymd("2011-09-30") ~ "2011-2016", #eleventh assembly start
+                              date > ymd("2006-09-30") ~ "2006-2011", #tenth
+                              date > ymd("2001-12-31") ~ "2001-2006", #ninth #December election, january start
+                              date > ymd("1996-01-01") ~ "1996-2001"
                               
                              ),
          speaker_clean = tolower(speaker),
@@ -90,7 +90,6 @@ split <- split %>%
          otherspeakers = sapply(otherspeakers,paste,collapse = "_"))
 
 #filter(split, grepl("'", split$speaker_clean)) %>% view() #Check
-
 
 #### Set up to Match Speakers in Parallel ####
 match_member <- function(daily_df){ #We have to process one day at a time because we reference whether a speaker has previously spoken
@@ -161,17 +160,24 @@ match_member <- function(daily_df){ #We have to process one day at a time becaus
 dates <- unique(split$date) #Vector of speech dates
 path <-  "/Users/jacobwinter/Dropbox/parl_debates_data/zambia_data/split_matched_debates/" #dest path
 
-match_day <- function(day){ #Generate new file with daily speech, metadata, and speaker info
+match_day <- function(day, overwrite=TRUE){ #Generate new file with daily speech, metadata, and speaker info
   fpath = paste0(path,day,".csv")
   daily_df = filter(split, date==day)
-  if(!file.exists(fpath)){ #Only process new docs
+  if(overwrite == FALSE){
+    if(!file.exists(fpath)){ #Only process new docs
+      out <- daily_df %>% 
+        match_member() 
+      cbind(daily_df, out) %>% 
+        write_csv(fpath)
+    }
+  }
+  else{
     out <- daily_df %>% 
       match_member() 
     cbind(daily_df, out) %>% 
       write_csv(fpath)
   }
 }
-
 
 # Test single day
 # date = sample(dates, 1)
@@ -184,7 +190,7 @@ match_day <- function(day){ #Generate new file with daily speech, metadata, and 
 #   #select(speaker, speaker_clean, text, member, name, constituency, match_alt, match_alt_val) %>%
 #   view()
 
-mclapply(dates, match_day, mc.cores=detectCores()) 
+mclapply(dates, match_day, overwrite=TRUE, mc.cores=detectCores()) #To just with new texts, set overwrite to false
 
 #### Re merge ####
 filelist <- list.files("/Users/jacobwinter/Dropbox/parl_debates_data/zambia_data/split_matched_debates")
@@ -203,18 +209,18 @@ write_csv(df, "/Users/jacobwinter/Dropbox/parl_debates_data/zambia_data/debates_
 d2 <- df %>% 
   filter(name == "unmatched"
          ) %>% 
-  group_by(speaker_clean, assembly) %>% summarise(num = n()) %>% 
+  group_by(speaker_clean, assembly) %>% summarise(num = n(), a = first(assembly)) %>% 
   ungroup() %>% 
   arrange(desc(num))
 
-d3 <- df %>% 
-  filter(is.na(otherspeakers)) %>%
+d3 <- df %>% #Share that we idebntify speaker
+  #filter(is.na(otherspeakers)) %>% (exclude members/speaker tagged speeches)
   mutate(found = ifelse(name=="unmatched","No","Yes")) %>% 
   group_by(found) %>% 
   summarize(n = n()) %>% 
   mutate(prop = n/sum(n))
 
-
+beepr::beep()
 # merged <- cbind(split, dplyr::select(assigned_speakers, -c(assembly, session))) 
 # 
 # m2 <- merged %>% 

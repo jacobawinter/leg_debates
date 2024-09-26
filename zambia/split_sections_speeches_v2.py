@@ -11,16 +11,16 @@ path = "/Users/jacobwinter/Dropbox/parl_debates_data/zambia_data/"
 file = "parl_debates_zm_2024_01_22.csv"
 corpus = pd.read_csv(path+file) #All agreement types
 
+
 #corpus['text'][0]
 #choose a random set
 #corpus = corpus.sample(10)
 
-#corpus['year'] = corpus['date'].astype(str).str[-4:]
-#is_2010 = corpus['year']=='2010'
-#corpus = corpus[is_2010]
+rownum = corpus.index[corpus['url'] == 'https://www.parliament.gov.zm/node/537'].tolist()
+corpus['text'][rownum] = corpus['text'][rownum].str.replace("Appendix.*", "", regex=True)
 
 corpus = corpus[corpus['text'] != "ERROR"]
-#corpus = corpus[corpus['url'] == "https://www.parliament.gov.zm/node/10064"]
+#corpus = corpus[corpus['url'] == "https://www.parliament.gov.zm/node/534"]
 speakers = []
 texts = []
 dates = []
@@ -28,7 +28,6 @@ section_list = []
 section_name = []
 urls = []
 rownum = 0
-
 
 for index, row in tqdm(corpus.iterrows(), total=corpus.shape[0]):
     #text = corpus.iloc[i, 2]
@@ -49,7 +48,9 @@ for index, row in tqdm(corpus.iterrows(), total=corpus.shape[0]):
         url = row['url']
         #date = datetime.datetime.strptime(re.sub(r"\b([0123]?[0-9])(st|th|nd|rd)\b",r"\1", date), "%d %B, %Y")
         for i in range(1, len(sections), 2):
-          names = re.split('(\n.{0,100}:)', sections[i+1])
+          sec = "\n"+sections[i+1]
+
+          names = re.split('(\n.{0,200}:)', sec)
           #print(i)
           #print(names[0])
           header = (sections[i])
@@ -69,6 +70,6 @@ df = pd.DataFrame(
 today = d.today()
 d1 = today.strftime("%Y_%m_%d")
 
-df.to_csv(path + "/split_debates_sec_" + d1 + ".csv")
-
+df.to_csv(path + "split_debates_sec_" + d1 + ".csv")
+print(path + "split_debates_sec_" + d1 + ".csv")
 
