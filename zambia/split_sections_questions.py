@@ -5,23 +5,6 @@ import pandas as pd
 from tqdm import tqdm
 import datetime    
 
-#import csv
-path = "/Users/jacobwinter/Dropbox/parl_debates_data/zambia_data/"
-file = "order_papers_zm_2024_07_25.csv"
-corpus = pd.read_csv(path+file) #
-
-
-corpus = corpus[corpus['text'] != "ERROR"]
-speakers = []
-constits = []
-question_numbers = []
-adressees = []
-texts = []
-dates = []
-urls = []
-full= []
-
-
 def split_to_sections(text):
         text = re.sub("\xa0",u" ", text) #get rid of this artefact as it can mess up identifying headers
         text = re.sub("{mospagebreak}","", text) #get rid of this artefact as it can mess up identifying headers
@@ -66,6 +49,28 @@ def extract_vars(question):
         text = "ERROR"
 
     return [number, consit, speaker, adressees, text]
+
+
+
+#Start Code
+if __name__ == "__main__":
+    #import csv
+    path = "/Users/jacobwinter/Dropbox/parl_debates_data/zambia_data/"
+    file = "order_papers_zm_2024_07_25.csv"
+    corpus = pd.read_csv(path+file) #
+
+    corpus = corpus.drop_duplicates(subset=['date'], keep='first') #Keep only first value for each date
+
+
+
+    speakers = []
+    constits = []
+    question_numbers = []
+    adressees = []
+    texts = []
+    dates = []
+    urls = []
+    full= []
 
 for index, row in tqdm(corpus.iterrows(), total=corpus.shape[0]):
     #text = corpus.iloc[699, 2]
@@ -112,15 +117,16 @@ for index, row in tqdm(corpus.iterrows(), total=corpus.shape[0]):
             urls.append(url)
             full.append(q)
 
-df = pd.DataFrame(
-    {'date': dates, 'question_number': question_numbers, 'constit':constits, 'speaker': speakers, 'addressee': adressees, 'text':texts, 'full':full, 'url':urls}
-)
+    #
+    df = pd.DataFrame(
+        {'date': dates, 'question_number': question_numbers, 'constit':constits, 'speaker': speakers, 'addressee': adressees, 'text':texts, 'full':full, 'url':urls}
+    )
 
-df = df[df['text'] != "ERROR"]
-df['written'] = [1 if "w" in x.lower() else 0 for x in df['question_number']]
+    df = df[df['text'] != "ERROR"]
+    df['written'] = [1 if "w" in x.lower() else 0 for x in df['question_number']]
 
-df.to_csv(path+"questions_zm_split.csv", index=False)
+    df.to_csv(path+"questions_zm_split.csv", index=False)
 
-#Check Mising Days
-#urls = set(corpus['url']) - set(df['url']) #Get the set of urls in corpus not in df_text
-#corpus[corpus['url'].isin(urls)].to_csv(path+"missing_qs_zm.csv", index=False) #Examine this manually
+    #Check Mising Days
+    #urls = set(corpus['url']) - set(df['url']) #Get the set of urls in corpus not in df_text
+    #corpus[corpus['url'].isin(urls)].to_csv(path+"missing_qs_zm.csv", index=False) #Examine this manually
