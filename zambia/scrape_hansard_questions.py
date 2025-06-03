@@ -5,10 +5,10 @@ from datetime import datetime, date
 
 def extract_vars(question_raw, speakers):
     #The beginning of each string is an all caps string with a number and a dot
-    question_header_match = re.search(r"([A-Z0-9\W]{2,}\n[Ww0-9]+.)", question_raw)
+    question_header_match = re.search(r"([\s\xa0]*[A-Z0-9\W]{2,}\n[\s\xa0]*[Ww0-9]+.)", question_raw)
 
     try:
-        title = re.search(r'[A-Z0-9\(\)\- ]+',question_header_match[0])
+        title = re.search(r'[\s\xa0]*[A-Z0-9\(\)\- ]+',question_header_match[0])
         title = re.sub("\n", " ", title[0])
     except:
         title = "ERROR"
@@ -141,20 +141,23 @@ def extract_date(date):
     date = datetime.strptime(date, "%Y-%m-%d")
     return date
 
-def split_questions(text_raw):
+def split_questions(text_raw, url):
     # Split on all caps "QUESTIONS FOR" and cut everything above
-
-    text = text_raw.split('QUESTIONS FOR')[1]
+    try:
+        text = text_raw.split('QUESTIONS FOR')[1]
+    except:
+        #print(f"No 'QUESTIONS FOR' found for {url}")
+        return None
     text = re.split(r'_+\s*\n[A-Z\s]+\n', text)[0] #Get rid of stuff after questions Usually _____\nMOTIONS
 
-    pattern = r'(?=^[A-Z0-9 ,;:\-\(\)]+\n\d+\..*)'
+   # pattern = r'(?=^[A-Z0-9 ,;:\-\(\)]+\n\d+\..*)|(?=^[A-Z0-9 ,;:\-\(\)]+\n\xa0\n\d+\..*)|(?=^[A-Z0-9 ,;:\-\(\)]+\n\xa0\d+\..*)'
+    #pattern = r'(?=^[A-Z0-9 ,;:\-\(\)]+\s*\n[\s\xa0]*\d+\.)'
+    pattern = r'(?=^[\s\xa0]*[A-Z0-9 ,;:\-\(\)]+\s*\n[\s\xa0]*\d+\.)' #Check for space or tab before caps
 
     # Split the text using the regex
     chunks = re.split(pattern, text, flags=re.MULTILINE)
 
-    # Filter out any empty chunks (optional)
-    
-    # Output
+    # Output 
     # for i, chunk in enumerate(chunks, 1):
     #     print(f"--- CHUNK {i} ---")
     #     print(chunk)
@@ -192,7 +195,7 @@ if __name__ == "__main__":
     file = "parl_debates_zm_2024_01_22.csv"
     corpus = pd.read_csv(path+file) #All agreement types
 
-    #corpus = corpus[corpus['url']=="https://www.parliament.gov.zm/node/1372"]
+    #corpus = corpus[corpus['url']=="https://www.parliament.gov.zm/node/11152"]
     corpus = corpus[corpus['text'] != "ERROR"]
 
     corpus = remove_duplicates = corpus.drop_duplicates(subset=['date'], keep='first')
@@ -215,8 +218,10 @@ if __name__ == "__main__":
 
 
             try:
-                chunks = split_questions(text)
+                chunks = split_questions(text, row['url'])
                 chunkcount = chunkcount + len(chunks)
+                if len(chunks) == 0:
+                    print(f"Empty chunk for {row['url']} on {row['date']}")
             except:
                 continue
             if len(chunks) > 0:

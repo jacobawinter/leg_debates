@@ -1,14 +1,18 @@
 
+# for the order papers
+
 #Packages
 import re
 import pandas as pd
 from tqdm import tqdm
 import datetime    
 
-def split_to_sections(text):
+def split_to_sections(text, url):
         text = re.sub("\xa0",u" ", text) #get rid of this artefact as it can mess up identifying headers
         text = re.sub("{mospagebreak}","", text) #get rid of this artefact as it can mess up identifying headers
         sections = re.split('([A-Z]{5,}[A-Z0-9 \.\,\-\:\)\(]{5,})', text)
+        if len(sections) < 2:
+            print(f"ERROR: No sections found for {url}")
         return sections
 
 def split_to_questions(section):
@@ -16,6 +20,7 @@ def split_to_questions(section):
     #Concat 1 and 2, 3 and 4 etc
     questions = [questions[i]+questions[i+1] for i in range(1, len(questions), 2)] #add number to text, skipping first line with header
     return questions
+
 
 def extract_vars(question):
     try:
@@ -84,7 +89,7 @@ for index, row in tqdm(corpus.iterrows(), total=corpus.shape[0]):
     if isinstance(text, str):
 
         url = row['url']
-        sections = split_to_sections(text)
+        sections = split_to_sections(text, row['url'])
 
         #Check if i in sections has "questions for oral answer"
         for i in range(0, len(sections)):
@@ -104,7 +109,7 @@ for index, row in tqdm(corpus.iterrows(), total=corpus.shape[0]):
                     full.append(q)
                     #print(vars)
     if url == "https://www.parliament.gov.zm/node/8081": ###Janky day with misformatting
-        sections = split_to_sections(text)
+        sections = split_to_sections(text, row['url'])
         questions = split_to_questions(sections[len(sections)-1])
         for q in questions:
             vars = extract_vars(q)
@@ -125,8 +130,14 @@ for index, row in tqdm(corpus.iterrows(), total=corpus.shape[0]):
     df = df[df['text'] != "ERROR"]
     df['written'] = [1 if "w" in x.lower() else 0 for x in df['question_number']]
 
-    df.to_csv(path+"questions_zm_split.csv", index=False)
+    today = datetime.date.today()
+    df.to_csv(path+f"questions_orderpaper_{today}.csv", index=False)
 
     #Check Mising Days
     #urls = set(corpus['url']) - set(df['url']) #Get the set of urls in corpus not in df_text
     #corpus[corpus['url'].isin(urls)].to_csv(path+"missing_qs_zm.csv", index=False) #Examine this manually
+
+# Confirm there are no missing days
+#missing = [link for link in corpus['url'] if link not in df['url'].values]
+#df_other = corpus[corpus['url'].isin(missing)]
+#df_other['text'].str.contains("questions for oral", case=False).value_counts()
